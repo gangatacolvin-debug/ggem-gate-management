@@ -1,62 +1,91 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { supabase } from '../lib/supabase'
 
-export const useAuthStore = create((set, get) => ({
-  currentOfficer: null,
-  isAuthenticated: false,
-  loading: false,
-  error: null,
-// Login with barcode
-loginWithBarcode: async (barcode) => {
-  set({ loading: true, error: null })
-  
-  try {
-    console.log('Looking for employee with barcode:', barcode)
-    console.log('Barcode length:', barcode.length)
-    console.log('Barcode characters:', barcode.split('').map(c => c.charCodeAt(0)))
-    // Find employee by barcode
-    const { data: employee, error: empError } = await supabase
-      .from('employees')
-      .select('*')
-      .eq('barcode', barcode)
-      .eq('status', 'active')
-      .single()
-          console.log('Query result:', employee)
-    console.log('Query error:', empError)
-
-    if (empError || !employee) {
-      throw new Error('Employee not found or inactive')
-    }
-
-    // Check if employee is security officer
-    if (!['security_control', 'security_gate', 'supervisor', 'admin'].includes(employee.role)) {
-      throw new Error('Only security officers can log in to this system')
-    }
-
-    set({ 
-      currentOfficer: employee,
-      isAuthenticated: true,
+export const useAuthStore = create(
+  persist(
+    (set, get) => ({
+      currentOfficer: null,
+      isAuthenticated: false,
       loading: false,
-      error: null
-    })
+      error: null,
 
-    return { success: true, officer: employee }
-  } catch (error) {
-    set({ loading: false, error: error.message })
-    return { success: false, error: error.message }
-  }
-},
+      // Verify employee exists (without PIN check) - for login step 1
+      verifyEmployee: async (barcode) => {
+        try {
+          const { data: employee, error } = await supabase
+            .from('employees')
+            .select('*')
+            .eq('barcode', barcode)
+            .eq('status', 'active')
+            .single()
 
-  // Logout
- // Logout
-logout: async () => {
-  set({ 
-    currentOfficer: null,
-    isAuthenticated: false,
-    error: null
-  })
-},
+          if (error || !employee) {
+            return null
+          }
 
-  // Clear error
-  clearError: () => set({ error: null })
-}))
+          // Check if has valid role
+          if (!['security_control', 'security_gate', 'admin', 'supervisor'].includes(employee.role)) {
+            return null
+          }
+
+          return employee
+        } catch (error) {
+          return null
+        }
+      },
+
+      // Login with barcode and PIN
+      loginWithBarcode: async (barcode, pin) => {
+        set({ loading: true, error: null })
+        
+        try {
+          // Find employee by barcode AND PIN
+          const { data: employee, error: empError } = await supabase
+            .from('employees')
+            .select('*')
+            .eq('barcode', barcode)
+            .eq('pin', pin)
+            .eq('status', 'active')
+            .single()
+
+          if (empError || !employee) {
+            set({ loading: false, error: 'Invalid barcode or PIN' })
+            return false
+          }
+
+          // Verify role
+          if (!['security_control', 'security_gate', 'admin', 'supervisor'].includes(employee.role)) {
+            set({ loading: false, error: 'Access denied. Invalid role.' })
+            return false
+          }
+
+          set({ 
+            currentOfficer: employee, 
+            isAuthenticated: true, 
+            loading: false 
+          })
+          return true
+        } catch (error) {
+          set({ loading: false, error: error.message })
+          return false
+        }
+      },
+
+      // Logout
+      logout: async () => {
+        set({ 
+          currentOfficer: null,
+          isAuthenticated: false,
+          error: null
+        })
+      },
+
+      // Clear error
+      clearError: () => set({ error: null })
+    }),
+    {
+      name: 'auth-storage', // localStorage key
+    }
+  )
+)

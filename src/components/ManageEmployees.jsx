@@ -40,6 +40,7 @@ export default function ManageEmployees() {
 
   // Form fields
   const [barcode, setBarcode] = useState('')
+  const [pin, setPin] = useState('1234')
   const [name, setName] = useState('')
   const [role, setRole] = useState('staff')
   const [department, setDepartment] = useState('')
@@ -70,6 +71,7 @@ export default function ManageEmployees() {
     if (employee) {
       setEditingEmployee(employee)
       setBarcode(employee.barcode)
+      setPin(employee.pin || '1234')
       setName(employee.name)
       setRole(employee.role)
       setDepartment(employee.department || '')
@@ -77,6 +79,7 @@ export default function ManageEmployees() {
     } else {
       setEditingEmployee(null)
       setBarcode('')
+      setPin('1234')
       setName('')
       setRole('staff')
       setDepartment('')
@@ -91,56 +94,64 @@ export default function ManageEmployees() {
     setEditingEmployee(null)
   }
 
-  const handleSave = async () => {
-    if (!barcode || !name || !role) {
-      setMessage({ type: 'error', text: 'Please fill in all required fields' })
-      return
-    }
-
-    setLoading(true)
-    try {
-      if (editingEmployee) {
-        // Update existing employee
-        const { error } = await supabase
-          .from('employees')
-          .update({
-            barcode,
-            name,
-            role,
-            department,
-            status,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingEmployee.id)
-
-        if (error) throw error
-        setMessage({ type: 'success', text: 'Employee updated successfully' })
-      } else {
-        // Create new employee
-        const { error } = await supabase
-          .from('employees')
-          .insert({
-            barcode,
-            name,
-            role,
-            department,
-            status
-          })
-
-        if (error) throw error
-        setMessage({ type: 'success', text: 'Employee added successfully' })
-      }
-
-      fetchEmployees()
-      setTimeout(() => {
-        closeDialog()
-      }, 1500)
-    } catch (error) {
-      setMessage({ type: 'error', text: error.message })
-    } finally {
-      setLoading(false)
-    }
+const handleSave = async () => {
+  if (!barcode || !name || !role || !pin) {
+    setMessage({ type: 'error', text: 'Please fill in all required fields' })
+    return
   }
+
+  // Validate PIN is exactly 4 digits
+  if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+    setMessage({ type: 'error', text: 'PIN must be exactly 4 digits' })
+    return
+  }
+
+  setLoading(true)
+  try {
+    if (editingEmployee) {
+      // Update existing employee
+      const { error } = await supabase
+        .from('employees')
+        .update({
+          barcode,
+          pin,  
+          name,
+          role,
+          department,
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingEmployee.id)
+
+      if (error) throw error
+      setMessage({ type: 'success', text: 'Employee updated successfully' })
+    } else {
+      // Create new employee
+      const { error } = await supabase
+        .from('employees')
+        .insert({
+          barcode,
+          pin,  
+          name,
+          role,
+          department,
+          status
+        })
+
+      if (error) throw error
+      setMessage({ type: 'success', text: 'Employee added successfully' })
+    }
+
+    fetchEmployees()
+    setTimeout(() => {
+      closeDialog()
+    }, 1500)
+  } catch (error) {
+    setMessage({ type: 'error', text: error.message })
+  } finally {
+    setLoading(false)
+  }
+}
 
   const handleDeactivate = async (employee) => {
     if (!confirm(`Are you sure you want to deactivate ${employee.name}?`)) return
@@ -266,6 +277,28 @@ export default function ManageEmployees() {
                   onChange={(e) => setBarcode(e.target.value)}
                 />
               </div>
+
+                        {/* ADD THIS NEW SECTION */}
+<div className="space-y-2">
+  <Label htmlFor="pin">4-Digit PIN *</Label>
+  <Input
+    id="pin"
+    type="text"
+    inputMode="numeric"
+    placeholder="1234"
+    value={pin}
+    onChange={(e) => {
+      const value = e.target.value.replace(/\D/g, '').slice(0, 4)
+      setPin(value)
+    }}
+    maxLength={4}
+  />
+  <p className="text-xs text-muted-foreground">
+    {editingEmployee 
+      ? 'Change PIN if employee forgot theirs' 
+      : 'Default PIN is 1234. Employee should change after first login.'}
+  </p>
+</div>
 
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name *</Label>

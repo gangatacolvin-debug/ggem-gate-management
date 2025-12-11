@@ -137,8 +137,13 @@ const handleUsbScan = (barcode) => {
   <EmployeeSearch 
     onSelect={(employee) => {
       if (employee) {
-        handleManualSubmit({ preventDefault: () => {} })
+        setScanning(true)
+        // Call onScan directly with the barcode
         onScan(employee.barcode)
+        
+        setTimeout(() => {
+          setScanning(false)
+        }, 1000)
       }
     }}
     disabled={disabled}
